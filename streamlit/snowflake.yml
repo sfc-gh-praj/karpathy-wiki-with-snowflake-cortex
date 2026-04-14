@@ -1,0 +1,17 @@
+definition_version: 2
+entities:
+  manufacturing_wiki_app:
+    type: streamlit
+    identifier:
+      name: MANUFACTURING_WIKI_APP
+      database: MANUFACTURING_WIKI
+      schema: KNOWLEDGE
+    query_warehouse: QUICKSTART
+    external_access_integrations:
+      - PYPI_ACCESS_INTEGRATION
+    main_file: app.py
+    artifacts:
+      - app.py
+      - pyproject.toml
+      - utils/__init__.py
+      - utils/wiki_ops.py
