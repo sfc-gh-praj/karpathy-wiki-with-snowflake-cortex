@@ -6,6 +6,16 @@ from snowflake.snowpark import Session
 SCHEMA = "MANUFACTURING_WIKI.KNOWLEDGE"
 
 
+def upload_pdf_to_stage(session: Session, uploaded_file) -> list:
+    """Upload a Streamlit UploadedFile to @MFG_STAGE. Returns PutResult list."""
+    return session.file.put_stream(
+        uploaded_file,
+        f"@{SCHEMA}.MFG_STAGE/{uploaded_file.name}",
+        auto_compress=False,
+        overwrite=True,
+    )
+
+
 def get_stage_files(session: Session) -> list[dict]:
     """Return all PDFs listed in @MFG_STAGE."""
     rows = session.sql(
@@ -95,11 +105,12 @@ def ingest_all_new(session: Session, limit: int = 20) -> dict:
     return raw if isinstance(raw, dict) else {}
 
 
-def answer_question(session: Session, question: str, save_to_wiki: bool = False) -> dict:
+def answer_question(session: Session, question: str, save_to_wiki: bool = False, period: str = None) -> dict:
     """Call ANSWER_QUESTION and return the parsed JSON response dict."""
     escaped = question.replace("'", "''")
+    period_val = f"'{period.replace(chr(39), chr(39)*2)}'" if period else "NULL"
     rows = session.sql(
-        f"CALL {SCHEMA}.ANSWER_QUESTION('{escaped}')"
+        f"CALL {SCHEMA}.ANSWER_QUESTION('{escaped}', 8, {period_val})"
     ).collect()
     if not rows:
         return {}
@@ -110,6 +121,19 @@ def answer_question(session: Session, question: str, save_to_wiki: bool = False)
         except Exception:
             return {"answer": raw}
     return raw if isinstance(raw, dict) else {}
+
+
+def get_period_labels(session: Session) -> list[str]:
+    """Return distinct non-null PERIOD_LABELs from WIKI_PAGES, ordered chronologically."""
+    rows = session.sql(
+        f"SELECT DISTINCT wp.PERIOD_LABEL, MIN(rd.PERIOD_START) AS ps "
+        f"FROM {SCHEMA}.WIKI_PAGES wp "
+        f"JOIN {SCHEMA}.RAW_DOCUMENTS rd ON ARRAY_CONTAINS(rd.DOC_ID::VARIANT, wp.SOURCE_DOCS) "
+        f"WHERE wp.PERIOD_LABEL IS NOT NULL "
+        f"GROUP BY wp.PERIOD_LABEL "
+        f"ORDER BY ps NULLS LAST"
+    ).collect()
+    return [r["PERIOD_LABEL"] for r in rows]
 
 
 def get_source_pdfs(session: Session, page_ids: list[str]) -> dict[str, list[str]]:

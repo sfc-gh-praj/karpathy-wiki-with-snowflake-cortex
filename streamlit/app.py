@@ -15,6 +15,7 @@ from utils.wiki_ops import (
     answer_question,
     get_ingested_docs,
     get_ingestion_log,
+    get_period_labels,
     get_source_pdfs,
     get_stage_files,
     get_wiki_index,
@@ -23,6 +24,7 @@ from utils.wiki_ops import (
     ingest_all_new,
     ingest_document,
     run_lint,
+    upload_pdf_to_stage,
 )
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -87,6 +89,31 @@ st.markdown(
     display: inline-block;
     margin-left: 8px;
 }
+
+/* Document chain */
+.mwiki-chain {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 0 12px 0;
+}
+.mwiki-chain-node {
+    background: #E3F2FD;
+    border: 1px solid #90CAF9;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #1565C0;
+    white-space: nowrap;
+    font-family: monospace;
+}
+.mwiki-chain-arrow {
+    color: #90CAF9;
+    font-size: 15px;
+    font-weight: bold;
+}
 </style>
 """,
     unsafe_allow_html=True,
@@ -150,10 +177,10 @@ tab_ask, tab_wiki, tab_ingest, tab_health = st.tabs(
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_ask:
     SAMPLE_QUESTIONS = [
-        "Which machines on Line L4 have overdue maintenance tasks?",
-        "What chemicals require temperature-controlled storage?",
-        "Which production line had the highest downtime this week?",
-        "Which suppliers have the highest lead times?",
+        "Which production line had the most downtime in the week of October 1, 2025?",
+        "What was the OEE performance across all lines in Q3 2025?",
+        "Which machines had Cpk below 1.33 in Q2 2025?",
+        "Which parts in the February 2026 catalog are below minimum stock?",
     ]
 
     # Sample question chip callbacks — run before script reruns
@@ -190,6 +217,18 @@ with tab_ask:
                 value=False,
                 help="Persist a successful answer as a new wiki page.",
             )
+            try:
+                _period_labels = get_period_labels(session)
+            except Exception:
+                _period_labels = []
+            _period_options = ["All time"] + _period_labels
+            _selected_period = st.selectbox(
+                "Period",
+                _period_options,
+                key="ask_period",
+                help="Filter wiki pages to a specific reporting period.",
+            )
+            _period_arg = None if _selected_period == "All time" else _selected_period
             ask_btn = st.button("Ask", type="primary", key="ask_btn")
 
     with col_ans:
@@ -200,7 +239,7 @@ with tab_ask:
             else:
                 with st.spinner("Searching wiki and synthesising answer..."):
                     try:
-                        resp = answer_question(session, q, save_to_wiki)
+                        resp = answer_question(session, q, save_to_wiki, period=_period_arg)
                         st.session_state["last_answer"] = resp
                     except Exception as exc:
                         st.error(f"Failed to get answer: {exc}")
@@ -209,10 +248,16 @@ with tab_ask:
         response = st.session_state.get("last_answer")
 
         if response:
-            # Lane badge + latency
+            # Lane badge + period badge + latency
             _lane = response.get("lane_used", response.get("lane", "synthesis"))
             _latency = response.get("duration_ms", response.get("latency_ms"))
+            _period_used = response.get("period_used")
             _meta = _lane_badge(_lane)
+            if _period_used:
+                _meta += (
+                    f'<span class="mwiki-badge mwiki-cat-default" '
+                    f'style="background:#546E7A">{_period_used}</span>'
+                )
             if _latency:
                 _meta += f'<span class="mwiki-latency">{_latency:,} ms</span>'
             st.markdown(_meta, unsafe_allow_html=True)
@@ -230,16 +275,63 @@ with tab_ask:
                     _pdf_map = {}
 
                 with st.expander(f"Source Documents ({len(_sources)} wiki pages)"):
+                    # ── Doc-chain header ──────────────────────────────────────
+                    # Build a horizontal pill-chain: doc1 page2 → doc3 page4 → ...
+                    _chain_nodes = []
+                    for _src in _sources:
+                        _pid = _src.get("page_id", "")
+                        _pdfs = _pdf_map.get(_pid, [])
+                        _fname = _pdfs[0].split("/")[-1] if _pdfs else "unknown.pdf"
+                        _page_label = _src.get("page_label", "")
+                        _node_label = _fname + (f" — {_page_label}" if _page_label else "")
+                        _chain_nodes.append(
+                            f'<span class="mwiki-chain-node">📄 {_node_label}</span>'
+                        )
+                    _arrow = ' <span class="mwiki-chain-arrow">→</span> '
+                    st.markdown(
+                        f'<div class="mwiki-chain">{_arrow.join(_chain_nodes)}</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    # ── Per-source section cards ──────────────────────────────
                     for _src in _sources:
                         _pid = _src.get("page_id", "")
                         _ptitle = _src.get("title", _pid)
+                        _cat = _src.get("category", "")
+                        _snip = _src.get("snippet", "")
                         _pdfs = _pdf_map.get(_pid, [])
-                        st.markdown(f"**{_ptitle}** `{_pid}`")
+
+                        # PDF filename(s) + exact page location — prominent
+                        _page_label = _src.get("page_label", "")
+                        _loc = f" &nbsp;—&nbsp; **{_page_label}**" if _page_label else ""
                         if _pdfs:
                             for _pdf in _pdfs:
-                                st.markdown(f"&nbsp;&nbsp;&nbsp;📄 `{_pdf}`")
+                                st.markdown(
+                                    f"📄 **`{_pdf}`**{_loc}",
+                                    unsafe_allow_html=True,
+                                )
                         else:
-                            st.markdown("&nbsp;&nbsp;&nbsp;_(PDF source not found)_")
+                            st.markdown(f"📄 _PDF source not found_{_loc}")
+
+                        # Wiki page title + category badge
+                        _badge_html = _cat_badge(_cat) if _cat else ""
+                        st.markdown(
+                            f"{_badge_html}&nbsp;<span style='font-size:13px'>"
+                            f"{_ptitle}</span>&nbsp;"
+                            f"<span style='color:#aaa;font-size:11px'>`{_pid}`</span>",
+                            unsafe_allow_html=True,
+                        )
+
+                        # Section view — raw PDF passage for this page
+                        if _snip:
+                            st.markdown(
+                                f"<div style='border-left:3px solid #1B3A6B;"
+                                f"padding:6px 12px;margin:6px 0 4px 0;"
+                                f"background:#f4f6fa;color:#333;font-size:12.5px;"
+                                f"border-radius:0 4px 4px 0'>{_snip}</div>",
+                                unsafe_allow_html=True,
+                            )
+
                         st.divider()
 
         elif not ask_btn:
@@ -254,7 +346,7 @@ with tab_ask:
 with tab_wiki:
     CATEGORIES = [
         "All", "equipment", "maintenance", "qc", "safety",
-        "production", "supplier", "fmea", "synthesis",
+        "production", "supplier", "fmea", "catalog", "synthesis",
     ]
 
     col_filter, col_main = st.columns([1, 3])
@@ -416,6 +508,64 @@ with tab_ingest:
 
     # ── Left column: stage browser + ingest controls ──────────────────────────
     with col_stage:
+
+        # ── Upload PDF from local machine ─────────────────────────────────────
+        with st.container():
+            st.markdown("**Upload PDF**")
+            _uploaded = st.file_uploader(
+                "Drop a PDF to upload to @MFG_STAGE",
+                type=["pdf"],
+                key="pdf_upload",
+                label_visibility="collapsed",
+            )
+            if _uploaded is not None:
+                _ucol1, _ucol2 = st.columns(2)
+                with _ucol1:
+                    _upload_ingest_btn = st.button(
+                        "Upload & Ingest", type="primary", key="upload_ingest_btn"
+                    )
+                with _ucol2:
+                    _upload_only_btn = st.button(
+                        "Upload Only", key="upload_only_btn"
+                    )
+
+                if _upload_ingest_btn:
+                    _ok = False
+                    with st.spinner(f"Uploading {_uploaded.name}…"):
+                        try:
+                            upload_pdf_to_stage(session, _uploaded)
+                            st.session_state["stage_files_cache"] = None
+                            _ok = True
+                        except Exception as exc:
+                            st.error(f"Upload failed: {exc}")
+                    if _ok:
+                        with st.spinner(f"Parsing and compiling {_uploaded.name}…"):
+                            try:
+                                _res = ingest_document(session, _uploaded.name)
+                                _pages = _res.get("compile", {}).get("pages_created", 0)
+                                st.success(
+                                    f"Done — `{_uploaded.name}` uploaded and compiled "
+                                    f"into {_pages} wiki page(s)."
+                                )
+                                st.session_state["wiki_index_cache"] = None
+                            except Exception as exc:
+                                st.error(f"Ingest failed: {exc}")
+
+                if _upload_only_btn:
+                    with st.spinner(f"Uploading {_uploaded.name}…"):
+                        try:
+                            upload_pdf_to_stage(session, _uploaded)
+                            st.success(
+                                f"`{_uploaded.name}` uploaded to @MFG_STAGE. "
+                                "Use Scan Stage below to ingest it when ready."
+                            )
+                            st.session_state["stage_files_cache"] = None
+                        except Exception as exc:
+                            st.error(f"Upload failed: {exc}")
+
+        st.divider()
+
+        # ── Stage file browser ────────────────────────────────────────────────
         with st.container():
             st.markdown("**Stage Files**")
 

@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "claude.md",
+                "file": "ARCHITECTURE_ANALYSIS.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "claude"
+              "title": "ARCHITECTURE_ANALYSIS"
             }
           },
           {
@@ -108,7 +108,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "claude.md",
+                "file": "ARCHITECTURE_ANALYSIS.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -118,7 +118,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for claude"
+              "title": "Backlinks for ARCHITECTURE_ANALYSIS"
             }
           },
           {
@@ -127,12 +127,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "claude.md",
+                "file": "ARCHITECTURE_ANALYSIS.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from claude"
+              "title": "Outgoing links from ARCHITECTURE_ANALYSIS"
             }
           },
           {
@@ -170,13 +170,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "claude.md",
+                "file": "ARCHITECTURE_ANALYSIS.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of claude"
+              "title": "Outline of ARCHITECTURE_ANALYSIS"
             }
           }
         ]
@@ -199,7 +199,25 @@
   },
   "active": "39f51686f9cbc1de",
   "lastOpenFiles": [
+    "pdfs/qc_report_0030.pdf",
+    "ARCHITECTURE_ANALYSIS.md",
+    "pdfs/safety_data_sheet_0030.pdf",
+    "pdfs/fmea_worksheet_0056.pdf",
+    "pdfs/qc_report_0016.pdf",
+    "pdfs/parts_catalog_0052.pdf",
+    "pdfs/parts_catalog_0044.pdf",
+    "pdfs/maintenance_report_0016.pdf",
+    "pdfs/parts_catalog_0048.pdf",
+    "pdfs/parts_catalog_0050.pdf",
+    "pdfs/parts_catalog_0046.pdf",
+    "pdfs/maintenance_report_0014.pdf",
+    "SP_COMPARISON_RESULTS.md",
+    "simplified-mfg-wiki/README.md",
     "claude.md",
+    "Another_Solution/healthcare-hybrid-project/docs/karpathy_explained.md",
+    "Another_Solution/healthcare-hybrid-project/docs/architecture.md",
+    "Another_Solution/healthcare-hybrid-project/docs/README.md",
+    "README.md",
     "QUESTION_FLOW_DOWNTIME.md",
     "PROMPT_TO_WIKI_ANNOTATED.md"
   ]
